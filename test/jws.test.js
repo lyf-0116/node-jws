@@ -1,5 +1,6 @@
 /*global process*/
 const Buffer = require('safe-buffer').Buffer;
+const crypto = require('crypto');
 const fs = require('fs');
 const test = require('tape');
 const jws = require('..');
@@ -13,6 +14,27 @@ function readfile(path) {
 
 function readstream(path) {
   return fs.createReadStream(__dirname + '/' + path);
+}
+
+function base64url(value) {
+  return Buffer
+    .from(value)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function createHmacJws(headerJson, payload, secret) {
+  const securedInput = base64url(headerJson) + '.' + base64url(payload);
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(securedInput)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  return securedInput + '.' + signature;
 }
 
 const rsaPrivateKey = readfile('rsa-private.pem');
@@ -288,6 +310,29 @@ test('jws.decode: with a bogus header ', function (t) {
   const sig = header + '.' + payload + '.';
   const parts = jws.decode(sig);
   t.same(parts, null);
+  t.end();
+});
+
+test('jws.decode: with duplicate header keys', function (t) {
+  const secret = 'shhh';
+  const duplicates = [
+    '{"alg":"HS256","alg":"none"}',
+    '{"alg":"HS256","\\u0061lg":"none"}',
+    '{"alg":"HS256","crit":{"name":"one","name":"two"}}'
+  ];
+
+  duplicates.forEach(function (header) {
+    const signature = createHmacJws(header, 'payload', secret);
+    t.same(jws.decode(signature), null, 'rejects duplicate key in ' + header);
+    t.same(jws.isValid(signature), false, 'marks duplicate key header as invalid');
+  });
+  t.end();
+});
+
+test('jws.verify: with duplicate header keys', function (t) {
+  const secret = 'shhh';
+  const signature = createHmacJws('{"alg":"HS256","alg":"none"}', 'payload', secret);
+  t.notOk(jws.verify(signature, 'HS256', secret));
   t.end();
 });
 

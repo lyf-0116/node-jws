@@ -76,6 +76,7 @@ buffer containing either the secret for HMAC algorithms, or the PEM
 encoded public key for RSA and ECDSA.
 
 Note that the `"alg"` value from the signature header is ignored.
+Signatures with duplicate JSON object keys in the header are rejected.
 
 
 ## jws.decode(signature)
@@ -90,6 +91,7 @@ Returns an object with three properties, e.g.
   signature: 'YOWPewyGHKu4Y_0M_vtlEnNlqmFOclqp4Hy6hVHfFT4'
 }
 ```
+Returns `null` when the header contains duplicate JSON object keys.
 
 ## jws.createSign(options)
 
