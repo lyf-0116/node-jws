@@ -316,6 +316,52 @@ test('jws.verify: missing or invalid algorithm', function (t) {
   t.end();
 });
 
+test('jws.verify: algorithm downgrade must not bypass the caller policy', function (t) {
+  const forged = jws.sign({
+    header: { alg: 'HS256' },
+    payload: { role: 'admin' },
+    secret: rsaPublicKey
+  });
+  t.same(jws.decode(forged).header.alg, 'HS256', 'forged token claims HS256');
+  t.notOk(jws.verify(forged, 'RS256', rsaPublicKey), 'RS256 policy rejects HS256 token');
+  t.throws(function () { jws.verify(forged, undefined, rsaPublicKey); }, 'missing algorithm throws');
+  t.end();
+});
+
+test('Streaming verify: algorithm downgrade must not bypass the caller policy', function (t) {
+  const forged = jws.sign({
+    header: { alg: 'HS256' },
+    payload: { role: 'admin' },
+    secret: rsaPublicKey
+  });
+  jws.createVerify({
+    algorithm: 'RS256',
+    signature: forged,
+    publicKey: rsaPublicKey
+  }).on('done', function (valid) {
+    t.notOk(valid, 'RS256 policy rejects HS256 token');
+    t.end();
+  });
+});
+
+test('Streaming verify: missing algorithm emits an error', function (t) {
+  const token = jws.sign({
+    header: { alg: 'HS256' },
+    payload: 'hi',
+    secret: 'shhh'
+  });
+  jws.createVerify({ signature: token, secret: 'shhh' })
+    .on('done', function () {
+      t.fail('should not have verified');
+      t.end();
+    })
+    .on('error', function (e) {
+      t.same(e.code, 'MISSING_ALGORITHM');
+      t.end();
+    })
+    .verify();
+});
+
 
 test('jws.isValid', function (t) {
   const valid = jws.sign({ header: { alg: 'HS256' }, payload: 'hi', secret: 'shhh' });
