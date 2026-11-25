@@ -194,9 +194,11 @@ test('Streaming verify: ECDSA', function (t) {
     payload: dataStream,
     privateKey: privateKeyStream
   });
-  const verifier = jws.createVerify({algorithm: 'ES512'});
+  const verifier = jws.createVerify({
+    algorithm: 'ES512',
+    publicKey: publicKeyStream
+  });
   sigStream.pipe(verifier.signature);
-  publicKeyStream.pipe(verifier.key);
   verifier.on('done', function (valid) {
     t.ok(valid, 'should verify');
     t.end();
@@ -444,4 +446,84 @@ test('Streaming verify: HMAC with null secret', function (t) {
     t.equal(error.message, 'secret must be a string or buffer or a KeyObject');
     t.end();
   }
+});
+
+test('Streaming verify: HMAC does not use publicKey as secret', function (t) {
+  try {
+    jws.createVerify({
+      algorithm: 'HS256',
+      publicKey: rsaPublicKey
+    });
+    t.fail('should have errored');
+  } catch (error) {
+    t.equal(error.name, 'TypeError');
+    t.equal(error.message, 'secret must be a string or buffer or a KeyObject');
+  }
+  t.end();
+});
+
+test('Streaming verify: asymmetric algorithms require publicKey', function (t) {
+  [undefined, null, '', Buffer.alloc(0)].forEach(function (publicKey) {
+    try {
+      jws.createVerify({
+        algorithm: 'RS256',
+        publicKey: publicKey
+      });
+      t.fail('should have errored for ' + String(publicKey));
+    } catch (error) {
+      t.equal(error.name, 'TypeError');
+      t.equal(error.message, 'publicKey must be a string or buffer or a KeyObject');
+    }
+  });
+  t.end();
+});
+
+test('Streaming verify: asymmetric algorithms do not use secret as publicKey', function (t) {
+  try {
+    jws.createVerify({
+      algorithm: 'RS256',
+      secret: rsaPublicKey
+    });
+    t.fail('should have errored');
+  } catch (error) {
+    t.equal(error.name, 'TypeError');
+    t.equal(error.message, 'publicKey must be a string or buffer or a KeyObject');
+  }
+  t.end();
+});
+
+test('Streaming verify: generic key is interpreted by the algorithm', function (t) {
+  const hmacToken = jws.sign({
+    header: { alg: 'HS256' },
+    payload: 'generic-hmac',
+    secret: 'generic-secret'
+  });
+  const rsaToken = jws.sign({
+    header: { alg: 'RS256' },
+    payload: 'generic-rsa',
+    privateKey: rsaPrivateKey
+  });
+  let pending = 2;
+
+  jws.createVerify({
+    algorithm: 'HS256',
+    signature: hmacToken,
+    key: 'generic-secret'
+  }).on('done', function (valid) {
+    t.ok(valid, 'generic key works as HMAC secret');
+    if (--pending === 0) t.end();
+  }).on('error', function (error) {
+    t.error(error);
+  });
+
+  jws.createVerify({
+    algorithm: 'RS256',
+    signature: rsaToken,
+    key: rsaPublicKey
+  }).on('done', function (valid) {
+    t.ok(valid, 'generic key works as RSA public key');
+    if (--pending === 0) t.end();
+  }).on('error', function (error) {
+    t.error(error);
+  });
 });

@@ -139,8 +139,13 @@ Options:
 
 * `signature`
 * `algorithm`
-* `key` || `publicKey` || `secret`
+* `secret` || `key` for `HS256`, `HS384`, and `HS512`
+* `publicKey` || `key` for `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, and `ES512`
 * `encoding` (Optional, defaults to 'utf8')
+
+`secret` and `publicKey` are not interchangeable. A field that belongs to the
+other algorithm family is not used as a fallback; use `key` when the same
+generic option name must be used for both families.
 
 All options expect a string or a buffer when the value is known ahead of
 time, or a stream for convenience.
@@ -151,15 +156,18 @@ Example:
 
 // This...
 jws.createVerify({
+  algorithm: 'RS256',
   publicKey: pubKeyStream,
   signature: sigStream,
 }).on('done', function(verified, obj) {
   // ...
 });
 
-// is equivilant to this:
-const verifier = jws.createVerify();
-pubKeyStream.pipe(verifier.publicKey);
+// is equivalent to this:
+const verifier = jws.createVerify({
+  algorithm: 'RS256',
+  key: pubKeyStream
+});
 sigStream.pipe(verifier.signature);
 verifier.on('done', function(verified, obj) {
   // ...
@@ -215,7 +223,7 @@ passed a `signature` option to the constructor.
 ### verifier.secret<br>verifier.key<br>verifier.publicKey
 
 A `Writable Stream` that expects a public key or secret. Do *not* use if you
-passed a `key` or `secret` option to the constructor.
+passed a `key`, `publicKey`, or `secret` option to the constructor.
 
 # TODO
 
